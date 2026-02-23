@@ -3,23 +3,23 @@ import machine
 import time
 
 # -------------------
-# PIN CONFIGURATION
-# -------------------
+# set pins
+
 DIR_PIN = 0
 PWM_PIN = 1
 ENC_A_PIN = 2
 ENC_B_PIN = 3
 
 # -------------------
-# MOTOR SETUP
-# -------------------
+# motor pins
+
 dir_pin = Pin(DIR_PIN, Pin.OUT)
 pwm = PWM(Pin(PWM_PIN))
 pwm.freq(20000)
 
 # -------------------
-# ENCODER SETUP
-# -------------------
+# encoder
+
 enc_a = Pin(ENC_A_PIN, Pin.IN, Pin.PULL_UP)
 enc_b = Pin(ENC_B_PIN, Pin.IN, Pin.PULL_UP)
 encoder_count = 0
@@ -31,15 +31,15 @@ def encoder_handler(pin):
     else:
         encoder_count -= 1
 
-enc_a.irq(trigger=Pin.IRQ_RISING, handler=encoder_handler)
+enc_a.irq(trigger=Pin.IRQ_RISING, handler=encoder_handler) # interrupt handler
 
 # -------------------
-# PID PARAMETERS
-# -------------------
-Kp = 0.3
-Ki = 0.05
-Kd = 0.01
-setpoint_rpm = 100
+# pid constants
+
+Kp = 0.8
+Ki = 0.4
+Kd = 0.02
+setpoint_rpm = 100 #!!!!!! TARGET
 integral = 0
 previous_error = 0
 previous_count = 0
@@ -51,8 +51,7 @@ control_timer = Timer()
 debug_timer = Timer()
 
 # -------------------
-# MOTOR CONTROL
-# -------------------
+# motor control adjustments
 def set_motor(speed):
     if speed >= 0:
         dir_pin.value(1)
@@ -65,8 +64,7 @@ def set_motor(speed):
     pwm.duty_u16(duty)
 
 # -------------------
-# MOTOR STOP
-# -------------------
+# motor stop function
 def motor_stop():
     global integral
     pwm.duty_u16(0)
@@ -75,8 +73,8 @@ def motor_stop():
     print("MOTOR STOPPED")
 
 # -------------------
-# PID LOOP (50Hz)
-# -------------------
+# pid loop - 50Hz
+
 def control_loop(timer):
     global previous_count, previous_time
     global integral, previous_error
@@ -93,7 +91,8 @@ def control_loop(timer):
         return
 
     delta = current_count - previous_count
-    rpm = (delta / COUNTS_PER_REV) / dt * 60
+    raw_rpm = (delta / COUNTS_PER_REV) / dt * 60
+    rpm = 0.7 * last_rpm + 0.3 * raw_rpm
     error = setpoint_rpm - rpm
     integral += error * dt
     derivative = (error - previous_error) / dt
@@ -108,20 +107,20 @@ def control_loop(timer):
     last_output = output
 
 # -------------------
-# DEBUG LOOP
-# -------------------
+# printed output
+
 def debug_loop(timer):
     error = setpoint_rpm - last_rpm
-    print("Target RPM:", setpoint_rpm,
-          "| Measured RPM:", round(last_rpm, 2),
-          "| Count:", encoder_count,
-          "| Output %:", round(last_output, 2),
-          "| Error:", round(error, 2))
+    print("target RPM:", setpoint_rpm,
+          "| measured RPM:", round(last_rpm, 2),
+          "| count:", encoder_count,
+          "| output %:", round(last_output, 2),
+          "| error:", round(error, 2))
 
 # -------------------
-# START
-# -------------------
+# start here
 control_timer.init(freq=50, mode=Timer.PERIODIC, callback=control_loop)
 debug_timer.init(freq=2, mode=Timer.PERIODIC, callback=debug_loop)
 
-# motor_stop()  # Uncomment to stop
+
+#motor_stop()  # uncomment, then run again to stop
