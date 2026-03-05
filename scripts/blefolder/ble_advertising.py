@@ -1,4 +1,5 @@
-# 
+# follow steps in picow folder in Drive
+# make sure UF2 file is downloaded onto Pico 
 from micropython import const
 import struct
 import bluetooth
