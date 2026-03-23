@@ -235,18 +235,19 @@ def make_slice_from_rgb_bytes(driver: SK6805Driver, blade: int, rgb_bytes: bytes
         blade:     0 or 1
         rgb_bytes: bytes object of length 240 (80 LEDs × 3 bytes, R-G-B order)
     """
-    if len(rgb_bytes) < SK6805Driver.LEDS_PER_BLADE * 3:
-        raise ValueError(f"rgb_bytes too short: expected {SK6805Driver.LEDS_PER_BLADE * 3}, got {len(rgb_bytes)}")
     offset = blade * SK6805Driver.LEDS_PER_BLADE
+
+    buf = driver._buf
+
     for i in range(SK6805Driver.LEDS_PER_BLADE):
+
         base = i * 3
+
         r = rgb_bytes[base]
         g = rgb_bytes[base + 1]
         b = rgb_bytes[base + 2]
-        r_s = (r * driver._brightness) >> 8
-        g_s = (g * driver._brightness) >> 8
-        b_s = (b * driver._brightness) >> 8
-        driver._buf[offset + i] = (g_s << 24) | (r_s << 16) | (b_s << 8)
+
+        buf[offset + i] = (g << 24) | (r << 16) | (b << 8)
 
 
 # ---------------------------------------------------------------------------
@@ -295,4 +296,3 @@ def self_test():
 # Run self-test when executed directly
 if __name__ == "__main__":
     self_test()
-
