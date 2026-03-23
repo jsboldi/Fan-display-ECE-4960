@@ -3,20 +3,20 @@ import struct
 import sys
 from PIL import Image
 
-# ==============================
+# ==========================================
 # Hardware Configuration
-# ==============================
+# ==========================================
 
 LEDS_PER_BLADE = 80
 NUM_BLADES = 2
-TOTAL_LEDS = LEDS_PER_BLADE * NUM_BLADES
-SLICES = 24
+
+SLICES = 32
 OUTPUT_FILE = "fan_image.bin"
 
 
-# ==============================
+# ==========================================
 # Argument Check
-# ==============================
+# ==========================================
 
 if len(sys.argv) < 2:
     print("Usage:")
@@ -26,13 +26,13 @@ if len(sys.argv) < 2:
 input_image = sys.argv[1]
 
 
-# ==============================
+# ==========================================
 # Load Image
-# ==============================
+# ==========================================
 
 image = Image.open(input_image).convert("RGB")
 
-
+# crop to square
 size = min(image.size)
 
 left = (image.width - size) // 2
@@ -41,6 +41,8 @@ right = left + size
 bottom = top + size
 
 image = image.crop((left, top, right, bottom))
+
+# high quality resize
 image = image.resize((size, size), Image.Resampling.LANCZOS)
 
 width, height = image.size
@@ -51,9 +53,9 @@ center_y = height / 2
 pixels = image.load()
 
 
-# ==============================
+# ==========================================
 # Bilinear Sampling
-# ==============================
+# ==========================================
 
 def sample(x, y):
 
@@ -71,69 +73,98 @@ def sample(x, y):
     r01, g01, b01 = pixels[x0, y1]
     r11, g11, b11 = pixels[x1, y1]
 
-    r = (r00*(1-dx)*(1-dy) +
-         r10*dx*(1-dy) +
-         r01*(1-dx)*dy +
-         r11*dx*dy)
+    r = (
+        r00 * (1-dx) * (1-dy) +
+        r10 * dx * (1-dy) +
+        r01 * (1-dx) * dy +
+        r11 * dx * dy
+    )
 
-    g = (g00*(1-dx)*(1-dy) +
-         g10*dx*(1-dy) +
-         g01*(1-dx)*dy +
-         g11*dx*dy)
+    g = (
+        g00 * (1-dx) * (1-dy) +
+        g10 * dx * (1-dy) +
+        g01 * (1-dx) * dy +
+        g11 * dx * dy
+    )
 
-    b = (b00*(1-dx)*(1-dy) +
-         b10*dx*(1-dy) +
-         b01*(1-dx)*dy +
-         b11*dx*dy)
+    b = (
+        b00 * (1-dx) * (1-dy) +
+        b10 * dx * (1-dy) +
+        b01 * (1-dx) * dy +
+        b11 * dx * dy
+    )
 
     return int(r), int(g), int(b)
 
 
-# ==============================
+# ==========================================
 # Convert Cartesian → Polar
-# ==============================
+# ==========================================
 
 fan_data = bytearray()
 
-for angle_index in range(SLICES):
+max_radius = min(center_x, center_y)
 
-    theta = 2 * math.pi * angle_index / SLICES
+for slice_index in range(SLICES):
 
-    slice_pixels = []
+    theta = 2 * math.pi * slice_index / SLICES
 
-    for r in range(TOTAL_LEDS):
+    # ======================================
+    # Blade 0
+    # ======================================
 
-        radius = r / (TOTAL_LEDS - 1)
+    for led in range(LEDS_PER_BLADE):
 
-        x = center_x + radius * center_x * math.cos(theta)
-        y = center_y + radius * center_y * math.sin(theta)
+        radius = (led + 0.5) / LEDS_PER_BLADE
+
+        x = center_x + radius * max_radius * math.cos(theta)
+        y = center_y + radius * max_radius * math.sin(theta)
 
         x = max(0, min(width - 1.001, x))
         y = max(0, min(height - 1.001, y))
 
         r_val, g_val, b_val = sample(x, y)
 
-        slice_pixels.append((r_val, g_val, b_val))
-
-    blade0 = slice_pixels[:LEDS_PER_BLADE]
-    blade1 = slice_pixels[LEDS_PER_BLADE:]
-
-    for r_val, g_val, b_val in blade0:
         fan_data += struct.pack("BBB", r_val, g_val, b_val)
 
-    for r_val, g_val, b_val in blade1:
+    # ======================================
+    # Blade 1 (180° opposite)
+    # ======================================
+
+    theta2 = theta + math.pi
+
+    for led in range(LEDS_PER_BLADE):
+
+        radius = (led + 0.5) / LEDS_PER_BLADE
+
+        x = center_x + radius * max_radius * math.cos(theta2)
+        y = center_y + radius * max_radius * math.sin(theta2)
+
+        x = max(0, min(width - 1.001, x))
+        y = max(0, min(height - 1.001, y))
+
+        r_val, g_val, b_val = sample(x, y)
+
         fan_data += struct.pack("BBB", r_val, g_val, b_val)
 
 
-# ==============================
+# ==========================================
 # Save Binary File
-# ==============================
+# ==========================================
 
 with open(OUTPUT_FILE, "wb") as f:
     f.write(fan_data)
 
+
+# ==========================================
+# Output Stats
+# ==========================================
+
 print("Conversion complete!")
 print("Input Image:", input_image)
 print("Output File:", OUTPUT_FILE)
-print("Total Size:", len(fan_data), "bytes")
 print("Slices:", SLICES)
+print("Total Size:", len(fan_data), "bytes")
+
+expected = SLICES * LEDS_PER_BLADE * NUM_BLADES * 3
+print("Expected Size:", expected, "bytes")
