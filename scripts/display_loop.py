@@ -1,6 +1,6 @@
+from hall_sensor import HallSensor
 from LED_driver import SK6805Driver, make_slice_from_rgb_bytes
 import utime
-
 # ==============================
 # Configuration
 # ==============================
@@ -9,24 +9,19 @@ LEDS_PER_BLADE = 80
 NUM_BLADES = 2
 TOTAL_LEDS = LEDS_PER_BLADE * NUM_BLADES
 
-SLICES = 360
+SLICES = 32
 BYTES_PER_LED = 3
 SLICE_SIZE = TOTAL_LEDS * BYTES_PER_LED
 
 IMAGE_FILE = "fan_image.bin"
 
-# simulated rotation speed
-RPM = 900
-ROTATIONS_PER_SEC = RPM / 60
-SLICES_PER_SEC = ROTATIONS_PER_SEC * SLICES
-
-SLICE_DELAY_US = int(1_000_000 / SLICES_PER_SEC)
 
 # ==============================
 # Initialize Driver
 # ==============================
 
 driver = SK6805Driver(pin=0, num_leds=TOTAL_LEDS, brightness=128)
+hall = HallSensor(pin=15)
 
 # ==============================
 # Load Image
@@ -45,36 +40,31 @@ print("Loaded slices:", NUM_SLICES)
 
 def display_loop():
 
-    current_slice = 0
-
     while True:
 
-        start = utime.ticks_us()
+        rotation_period = hall.wait_for_rotation()
 
-        offset = current_slice * SLICE_SIZE
-        slice_data = image_data[offset:offset + SLICE_SIZE]
+        slice_time = rotation_period // SLICES
 
-        blade0 = slice_data[:LEDS_PER_BLADE * 3]
-        blade1 = slice_data[LEDS_PER_BLADE * 3:]
+        for current_slice in range(NUM_SLICES):
 
-        make_slice_from_rgb_bytes(driver, 0, blade0)
-        make_slice_from_rgb_bytes(driver, 1, blade1)
+            start = utime.ticks_us()
 
-        driver.show()
+            offset = current_slice * SLICE_SIZE
+            slice_data = image_data[offset:offset + SLICE_SIZE]
 
-        current_slice += 1
+            blade0 = slice_data[:LEDS_PER_BLADE * 3]
+            blade1 = slice_data[LEDS_PER_BLADE * 3:]
 
-        if current_slice >= NUM_SLICES:
-            current_slice = 0
+            make_slice_from_rgb_bytes(driver, 0, blade0)
+            make_slice_from_rgb_bytes(driver, 1, blade1)
 
-        elapsed = utime.ticks_diff(utime.ticks_us(), start)
+            driver.show()
 
-        if elapsed < SLICE_DELAY_US:
-            utime.sleep_us(SLICE_DELAY_US - elapsed)
+            elapsed = utime.ticks_diff(utime.ticks_us(), start)
 
+            if elapsed < slice_time:
+                utime.sleep_us(slice_time - elapsed)
 
-# ==============================
-# Run
-# ==============================
 
 display_loop()
