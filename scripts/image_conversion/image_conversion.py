@@ -96,7 +96,7 @@ for slice_index in range(SLICES):
         g_val = int(g_val * BRIGHTNESS)
         b_val = int(b_val * BRIGHTNESS)
 
-        fan_data += struct.pack("BBB", r_val, g_val, b_val)
+        fan_data += struct.pack("BBB", g_val, r_val, b_val)
 
     # Blade 1 (180° opposite)
     theta2 = theta + math.pi
@@ -113,7 +113,7 @@ for slice_index in range(SLICES):
         g_val = int(g_val * BRIGHTNESS)
         b_val = int(b_val * BRIGHTNESS)
 
-        fan_data += struct.pack("BBB", r_val, g_val, b_val)
+        fan_data += struct.pack("BBB", g_val, r_val, b_val)
 
 # ==========================================
 # Save Binary File
