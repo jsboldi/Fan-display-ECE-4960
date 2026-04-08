@@ -1,3 +1,5 @@
+# SEE Image Conversion folder
+
 import math
 import struct
 import sys
