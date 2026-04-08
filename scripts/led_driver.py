@@ -1,3 +1,5 @@
+# MAY BE FIXES NEEDED: Our LEDS require GRB order, not RGB 
+
 # led_driver.py
 # PIO-based SK6805 EC15 LED driver for Raspberry Pi Pico W
 # Target hardware: 2 blades x 80 LEDs = 160 SK6805 EC15 LEDs (WS2812B-compatible protocol)
