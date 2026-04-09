@@ -1,0 +1,136 @@
+# ==============================================================================
+# verify_image.py — Reconstruct fan_image.bin into a viewable PNG
+#
+# Reads the binary polar slice data and re-renders it into a flat circular
+# image so you can visually confirm it matches your source image.
+#
+# Usage:
+#   python3 verify_image.py                        # reads fan_image.bin
+#   python3 verify_image.py my_other_file.bin
+#   python3 verify_image.py fan_image.bin --size 600
+# ==============================================================================
+
+import sys
+import math
+import struct
+import argparse
+from pathlib import Path
+
+try:
+    from PIL import Image, ImageDraw
+except ImportError:
+    print("ERROR: pip install Pillow")
+    sys.exit(1)
+
+# --- Config (must match config.py) ---
+SLICES        = 32
+LEDS_PER_BLADE = 80
+NUM_BLADES    = 2
+IMAGE_SIZE    = SLICES * LEDS_PER_BLADE * NUM_BLADES * 3  # 15360
+SLICE_STRIDE  = LEDS_PER_BLADE * NUM_BLADES * 3           # 480
+BLADE_STRIDE  = LEDS_PER_BLADE * 3                        # 240
+
+def load_and_validate(path: str) -> bytes:
+    data = Path(path).read_bytes()
+    if len(data) != IMAGE_SIZE:
+        print(f"ERROR: {len(data)} bytes, expected {IMAGE_SIZE}")
+        sys.exit(1)
+    return data
+
+def reconstruct(data: bytes, out_size: int = 512) -> Image.Image:
+    """
+    Re-render the polar slice binary back into a square RGB image.
+    Each LED maps to a small filled circle at its (r, theta) position.
+    """
+    img = Image.new("RGB", (out_size, out_size), (0, 0, 0))
+    draw = ImageDraw.Draw(img)
+
+    cx = out_size / 2
+    cy = out_size / 2
+    max_r = out_size / 2
+
+    # Dot radius scales so adjacent LEDs just touch
+    dot_r = max(1.0, (max_r / LEDS_PER_BLADE) * 0.6)
+
+    for slice_idx in range(SLICES):
+        # Blade 0 angle
+        theta0 = 2 * math.pi * slice_idx / SLICES
+        # Blade 1 is 180° opposite
+        theta1 = theta0 + math.pi
+
+        slice_offset = slice_idx * SLICE_STRIDE
+
+        for led in range(LEDS_PER_BLADE):
+            radius = (led + 0.5) / LEDS_PER_BLADE  # 0..1
+
+            # ── Blade 0 ──────────────────────────────────────────────
+            b0_off = slice_offset + led * 3
+            g0, r0, b0 = data[b0_off], data[b0_off+1], data[b0_off+2]
+
+            x0 = cx + radius * max_r * math.cos(theta0)
+            y0 = cy + radius * max_r * math.sin(theta0)
+            draw.ellipse(
+                [x0 - dot_r, y0 - dot_r, x0 + dot_r, y0 + dot_r],
+                fill=(r0, g0, b0),  # convert GRB → RGB for display
+            )
+
+            # ── Blade 1 ──────────────────────────────────────────────
+            b1_off = slice_offset + BLADE_STRIDE + led * 3
+            g1, r1, b1 = data[b1_off], data[b1_off+1], data[b1_off+2]
+
+            x1 = cx + radius * max_r * math.cos(theta1)
+            y1 = cy + radius * max_r * math.sin(theta1)
+            draw.ellipse(
+                [x1 - dot_r, y1 - dot_r, x1 + dot_r, y1 + dot_r],
+                fill=(r1, g1, b1),
+            )
+
+    return img
+
+def print_stats(data: bytes) -> None:
+    print(f"\n{'='*50}")
+    print(f"  fan_image.bin statistics")
+    print(f"{'='*50}")
+    print(f"  Total bytes  : {len(data)} (expected {IMAGE_SIZE})")
+
+    nonzero = sum(1 for x in data if x > 0)
+    print(f"  Non-zero     : {nonzero} ({nonzero*100//len(data)}%)")
+
+    total_r = total_g = total_b = 0
+    for i in range(0, len(data), 3):
+        total_g += data[i]
+        total_r += data[i+1]
+        total_b += data[i+2]
+    n = len(data) // 3
+    print(f"  Avg G={total_g//n:3d}  R={total_r//n:3d}  B={total_b//n:3d}  (GRB order)")
+
+    # Print a rough per-slice brightness map
+    print(f"\n  Per-slice brightness (. = dark, # = bright):")
+    for s in range(SLICES):
+        off   = s * SLICE_STRIDE
+        total = sum(data[off : off + SLICE_STRIDE])
+        bar   = int(total / (SLICE_STRIDE * 255) * 20)
+        print(f"    Slice {s:02d}: {'#' * bar}{'.' * (20-bar)} {total // SLICE_STRIDE:3d} avg")
+    print()
+
+def main():
+    parser = argparse.ArgumentParser(description="Verify fan_image.bin by reconstructing it as a PNG")
+    parser.add_argument("binary", nargs="?", default="fan_image.bin")
+    parser.add_argument("--size", type=int, default=512, help="Output image size in pixels (default 512)")
+    parser.add_argument("--out", default="fan_verify.png", help="Output PNG path (default fan_verify.png)")
+    args = parser.parse_args()
+
+    data = load_and_validate(args.binary)
+    print_stats(data)
+
+    print(f"  Reconstructing {args.size}×{args.size} preview…")
+    img = reconstruct(data, out_size=args.size)
+    img.save(args.out)
+    print(f"  Saved: {args.out}")
+    checksum = sum(data) & 0xFFFF
+    print(f"  Checksum (sum mod 65536): 0x{checksum:04X}  <- compare with Pico verify_pico.py output")
+    print(f"\n  Open {args.out} and compare it against your source image.")
+    print(f"  It will look like a spoked wheel — that is correct for {SLICES} slices.\n")
+
+if __name__ == "__main__":
+    main()
