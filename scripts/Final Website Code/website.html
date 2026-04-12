@@ -1,0 +1,836 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>POV Fan HMI</title>
+<style>
+  :root {
+    --bg: #0a0a0f;
+    --bg2: #12121a;
+    --bg3: #1a1a26;
+    --border: rgba(255,255,255,0.08);
+    --border2: rgba(255,255,255,0.15);
+    --text: #e8e8f0;
+    --text2: #8888aa;
+    --accent: #7c6dfa;
+    --accent2: #a594ff;
+    --success: #3ecf8e;
+    --warn: #f5a623;
+    --danger: #e05252;
+    --radius: 12px;
+    --radius-sm: 8px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Inter', system-ui, sans-serif;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* ── Header ── */
+  header {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 20px 32px;
+    border-bottom: 1px solid var(--border);
+    background: var(--bg2);
+  }
+  .logo {
+    width: 36px; height: 36px;
+    background: var(--accent);
+    border-radius: 10px;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .logo svg { width: 20px; height: 20px; }
+  header h1 { font-size: 17px; font-weight: 600; letter-spacing: -0.3px; }
+  header span { font-size: 13px; color: var(--text2); margin-left: auto; }
+
+  /* ── Status bar ── */
+  #status-bar {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 32px;
+    background: var(--bg2);
+    border-bottom: 1px solid var(--border);
+    font-size: 13px;
+  }
+  .dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: var(--text2);
+    flex-shrink: 0;
+    transition: background 0.3s;
+  }
+  .dot.connected { background: var(--success); box-shadow: 0 0 6px var(--success); }
+  .dot.error     { background: var(--danger); }
+  #status-msg    { color: var(--text2); }
+
+  /* ── Main layout ── */
+  main {
+    flex: 1;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 24px;
+    padding: 28px 32px;
+    max-width: 1100px;
+    width: 100%;
+    margin: 0 auto;
+  }
+
+  /* ── Cards ── */
+  .card {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 20px 22px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+  .card-title {
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--text2);
+  }
+
+  /* ── BLE Card ── */
+  #ble-card { grid-column: 1 / -1; flex-direction: row; align-items: center; gap: 20px; }
+  #ble-card .card-title { flex-shrink: 0; }
+  #ble-device-name {
+    flex: 1;
+    font-size: 14px;
+    color: var(--text2);
+    font-style: italic;
+  }
+  #ble-device-name.found { color: var(--text); font-style: normal; font-weight: 500; }
+
+  /* ── Buttons ── */
+  .btn {
+    padding: 9px 18px;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border2);
+    background: transparent;
+    color: var(--text);
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background 0.15s, border-color 0.15s, opacity 0.15s;
+    white-space: nowrap;
+  }
+  .btn:hover:not(:disabled) { background: var(--bg3); border-color: rgba(255,255,255,0.25); }
+  .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+  .btn-primary {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #fff;
+  }
+  .btn-primary:hover:not(:disabled) { background: var(--accent2); border-color: var(--accent2); }
+  .btn-danger  { border-color: var(--danger); color: var(--danger); }
+  .btn-danger:hover:not(:disabled)  { background: rgba(224,82,82,0.1); }
+  .btn-success { border-color: var(--success); color: var(--success); }
+  .btn-success:hover:not(:disabled) { background: rgba(62,207,142,0.1); }
+
+  /* ── Image panel ── */
+  #drop-zone {
+    border: 1.5px dashed var(--border2);
+    border-radius: var(--radius-sm);
+    min-height: 180px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    cursor: pointer;
+    transition: border-color 0.2s, background 0.2s;
+    position: relative;
+    overflow: hidden;
+  }
+  #drop-zone.drag-over { border-color: var(--accent); background: rgba(124,109,250,0.06); }
+  #drop-zone.has-image { border-style: solid; border-color: var(--border2); }
+  #drop-zone p { font-size: 13px; color: var(--text2); text-align: center; }
+  #drop-zone small { font-size: 11px; color: var(--text2); opacity: 0.6; }
+  #preview-img {
+    width: 100%; height: 100%;
+    object-fit: contain;
+    max-height: 240px;
+    display: none;
+    border-radius: var(--radius-sm);
+  }
+  #file-input { display: none; }
+
+  /* ── Camera ── */
+  #camera-wrap { position: relative; border-radius: var(--radius-sm); overflow: hidden; display: none; }
+  #camera-video { width: 100%; max-height: 240px; object-fit: cover; display: block; }
+  #camera-overlay {
+    position: absolute; inset: 0;
+    display: flex; align-items: center; justify-content: center;
+    background: rgba(0,0,0,0.35);
+  }
+  .btn-row { display: flex; gap: 8px; flex-wrap: wrap; }
+
+  /* ── Settings ── */
+  .setting-row {
+    display: flex; align-items: center; justify-content: space-between;
+    font-size: 13px;
+  }
+  .setting-row label { color: var(--text2); }
+  .setting-row input[type=range] { width: 120px; accent-color: var(--accent); }
+  .setting-val { min-width: 36px; text-align: right; font-weight: 500; font-size: 13px; }
+  .setting-row select {
+    background: var(--bg3); border: 1px solid var(--border2);
+    color: var(--text); border-radius: var(--radius-sm);
+    padding: 4px 8px; font-size: 13px;
+  }
+
+  /* ── Convert / Send panel ── */
+  #canvas-preview { display: none; }
+  #polar-preview {
+    width: 100%; max-height: 200px;
+    object-fit: contain;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border);
+    display: none;
+  }
+
+  /* ── Progress ── */
+  .progress-wrap {
+    background: var(--bg3);
+    border-radius: 99px;
+    height: 6px;
+    overflow: hidden;
+    display: none;
+  }
+  .progress-bar {
+    height: 100%;
+    width: 0%;
+    background: var(--accent);
+    border-radius: 99px;
+    transition: width 0.2s;
+  }
+  #progress-label { font-size: 12px; color: var(--text2); }
+
+  /* ── Log ── */
+  #log {
+    grid-column: 1 / -1;
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 14px 18px;
+    font-family: 'SF Mono', 'Fira Code', monospace;
+    font-size: 12px;
+    color: var(--text2);
+    max-height: 160px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+  }
+  .log-line { display: flex; gap: 10px; }
+  .log-time { color: var(--text2); opacity: 0.5; flex-shrink: 0; }
+  .log-info  { color: var(--text); }
+  .log-ok    { color: var(--success); }
+  .log-warn  { color: var(--warn); }
+  .log-err   { color: var(--danger); }
+
+  @media (max-width: 680px) {
+    main { grid-template-columns: 1fr; padding: 16px; }
+    #ble-card { flex-direction: column; align-items: flex-start; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    <svg viewBox="0 0 20 20" fill="none" stroke="white" stroke-width="1.8">
+      <circle cx="10" cy="10" r="2"/>
+      <path d="M10 3 L10 1M10 19 L10 17M3 10 L1 10M19 10 L17 10"/>
+      <path d="M10 3 Q14 6 14 10 Q14 14 10 17" stroke-dasharray="2 1.5"/>
+      <path d="M10 3 Q6 6 6 10 Q6 14 10 17" stroke-dasharray="2 1.5"/>
+    </svg>
+  </div>
+  <h1>POV Fan HMI</h1>
+  <span id="header-state">Disconnected</span>
+</header>
+
+<div id="status-bar">
+  <div class="dot" id="ble-dot"></div>
+  <span id="status-msg">Not connected — click Connect to find your fan</span>
+</div>
+
+<main>
+
+  <!-- BLE Connection -->
+  <div class="card" id="ble-card">
+    <span class="card-title">Bluetooth</span>
+    <span id="ble-device-name">No device selected</span>
+    <div class="btn-row">
+      <button class="btn btn-primary" id="btn-connect">Connect</button>
+      <button class="btn btn-danger"  id="btn-disconnect" disabled>Disconnect</button>
+    </div>
+  </div>
+
+  <!-- Image Source -->
+  <div class="card">
+    <span class="card-title">Image source</span>
+
+    <div id="drop-zone" title="Click or drop image">
+      <img id="preview-img" alt="preview"/>
+      <svg id="drop-icon" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" style="color:var(--text2)">
+        <rect x="3" y="3" width="18" height="18" rx="3"/>
+        <circle cx="8.5" cy="8.5" r="1.5"/>
+        <polyline points="21 15 16 10 5 21"/>
+      </svg>
+      <p>Drop image here or click to upload</p>
+      <small>PNG, JPG, GIF — will be cropped to square</small>
+    </div>
+    <input type="file" id="file-input" accept="image/*">
+
+    <div id="camera-wrap">
+      <video id="camera-video" autoplay playsinline></video>
+      <div id="camera-overlay">
+        <button class="btn btn-primary" id="btn-snap">Take photo</button>
+      </div>
+    </div>
+    <canvas id="canvas-preview" style="display:none"></canvas>
+
+    <div class="btn-row">
+      <button class="btn" id="btn-camera">Use camera</button>
+      <button class="btn btn-danger" id="btn-clear" disabled>Clear</button>
+    </div>
+  </div>
+
+  <!-- Settings + Convert -->
+  <div class="card">
+    <span class="card-title">Conversion settings</span>
+
+    <div class="setting-row">
+      <label>Slices</label>
+      <select id="sel-slices">
+        <option value="16">16</option>
+        <option value="32" selected>32</option>
+        <option value="64">64</option>
+        <option value="128">128</option>
+      </select>
+    </div>
+
+    <div class="setting-row">
+      <label>Brightness</label>
+      <input type="range" id="sl-brightness" min="1" max="100" value="15" step="1">
+      <span class="setting-val" id="val-brightness">15%</span>
+    </div>
+
+    <div class="setting-row">
+      <label>Gamma</label>
+      <select id="sel-gamma">
+        <option value="1.0">1.0 — none (linear)</option>
+        <option value="1.8">1.8 — mild</option>
+        <option value="2.2" selected>2.2 — standard (recommended)</option>
+        <option value="2.8">2.8 — strong</option>
+      </select>
+    </div>
+
+    <div class="setting-row">
+      <label>Chunk size (bytes)</label>
+      <input type="range" id="sl-chunk" min="20" max="512" value="100" step="10">
+      <span class="setting-val" id="val-chunk">100</span>
+    </div>
+
+    <div class="setting-row">
+      <label>Delay between chunks (ms)</label>
+      <input type="range" id="sl-delay" min="5" max="100" value="10" step="5">
+      <span class="setting-val" id="val-delay">10 ms</span>
+    </div>
+
+    <hr style="border:none; border-top: 1px solid var(--border);">
+
+    <img id="polar-preview" alt="polar preview">
+
+    <div class="btn-row">
+      <button class="btn btn-primary" id="btn-convert" disabled>Convert image</button>
+      <button class="btn btn-success" id="btn-send"    disabled>Send to fan</button>
+    </div>
+
+    <div class="progress-wrap" id="progress-wrap">
+      <div class="progress-bar" id="progress-bar"></div>
+    </div>
+    <span id="progress-label"></span>
+  </div>
+
+  <!-- Log -->
+  <div id="log"></div>
+
+</main>
+
+<script>
+// ═══════════════════════════════════════════════════════
+// Config (mirrors config.py)
+// ═══════════════════════════════════════════════════════
+const NUS_SERVICE = '6e400001-b5a3-f393-e0a9-e50e24dcca9e';
+const NUS_RX      = '6e400002-b5a3-f393-e0a9-e50e24dcca9e'; // PC writes here
+const NUS_TX      = '6e400003-b5a3-f393-e0a9-e50e24dcca9e'; // Pico notifies here
+const LEDS_PER_BLADE = 80;
+const NUM_BLADES     = 2;
+const MAGIC = new Uint8Array([0xDE, 0xAD, 0xBE, 0xEF]);
+
+// ═══════════════════════════════════════════════════════
+// State
+// ═══════════════════════════════════════════════════════
+let bleDevice   = null;
+let bleServer   = null;
+let rxChar      = null;
+let txChar      = null;
+let imageData   = null;  // Uint8Array — raw GRB binary ready to send
+let cameraStream = null;
+let ackResolve  = null;
+
+// ═══════════════════════════════════════════════════════
+// Logging
+// ═══════════════════════════════════════════════════════
+function log(msg, type = 'info') {
+  const box  = document.getElementById('log');
+  const now  = new Date();
+  const time = `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}:${String(now.getSeconds()).padStart(2,'0')}`;
+  const line = document.createElement('div');
+  line.className = 'log-line';
+  line.innerHTML = `<span class="log-time">${time}</span><span class="log-${type}">${msg}</span>`;
+  box.appendChild(line);
+  box.scrollTop = box.scrollHeight;
+}
+
+function setStatus(msg, connected = false, error = false) {
+  document.getElementById('status-msg').textContent = msg;
+  document.getElementById('header-state').textContent = connected ? 'Connected' : 'Disconnected';
+  const dot = document.getElementById('ble-dot');
+  dot.className = 'dot' + (connected ? ' connected' : error ? ' error' : '');
+}
+
+// ═══════════════════════════════════════════════════════
+// BLE
+// ═══════════════════════════════════════════════════════
+document.getElementById('btn-connect').addEventListener('click', async () => {
+  if (!navigator.bluetooth) {
+    log('Web Bluetooth not supported — use Chrome or Edge', 'err');
+    return;
+  }
+  try {
+    log('Scanning for POV-Fan...');
+    bleDevice = await navigator.bluetooth.requestDevice({
+      filters: [{ name: 'POV-Fan' }],
+      optionalServices: [NUS_SERVICE],
+    });
+    bleDevice.addEventListener('gattserverdisconnected', onDisconnected);
+    log(`Found: ${bleDevice.name}`, 'ok');
+
+    bleServer = await bleDevice.gatt.connect();
+    const service = await bleServer.getPrimaryService(NUS_SERVICE);
+    rxChar = await service.getCharacteristic(NUS_RX);
+    txChar = await service.getCharacteristic(NUS_TX);
+
+    await txChar.startNotifications();
+    txChar.addEventListener('characteristicvaluechanged', onNotify);
+
+    setStatus(`Connected to ${bleDevice.name}`, true);
+    document.getElementById('ble-device-name').textContent = bleDevice.name;
+    document.getElementById('ble-device-name').className = 'found';
+    document.getElementById('btn-connect').disabled    = true;
+    document.getElementById('btn-disconnect').disabled = false;
+    log('BLE connection established', 'ok');
+    updateSendButton();
+  } catch (e) {
+    log(`Connect failed: ${e.message}`, 'err');
+    setStatus('Connection failed', false, true);
+  }
+});
+
+document.getElementById('btn-disconnect').addEventListener('click', () => {
+  if (bleDevice && bleDevice.gatt.connected) bleDevice.gatt.disconnect();
+});
+
+function onDisconnected() {
+  bleDevice = null; bleServer = null; rxChar = null; txChar = null;
+  setStatus('Disconnected — click Connect to reconnect', false);
+  document.getElementById('btn-connect').disabled    = false;
+  document.getElementById('btn-disconnect').disabled = true;
+  document.getElementById('ble-device-name').textContent = 'No device selected';
+  document.getElementById('ble-device-name').className = '';
+  log('Disconnected from device', 'warn');
+  updateSendButton();
+}
+
+function onNotify(event) {
+  const raw = new Uint8Array(event.target.value.buffer);
+  const val = new TextDecoder().decode(event.target.value).trim();
+  log(`Pico replied: "${val}" (${raw.length} bytes)`, 'ok');
+  // Match OK regardless of trailing whitespace/nulls, and resolve
+  // even if ackResolve was set before this event fired.
+  if (val.includes('OK')) {
+    if (ackResolve) { ackResolve(); ackResolve = null; }
+  }
+}
+
+// ═══════════════════════════════════════════════════════
+// Image input — file upload
+// ═══════════════════════════════════════════════════════
+const dropZone  = document.getElementById('drop-zone');
+const fileInput = document.getElementById('file-input');
+
+dropZone.addEventListener('click', () => {
+  if (!document.getElementById('camera-wrap').style.display || document.getElementById('camera-wrap').style.display === 'none')
+    fileInput.click();
+});
+fileInput.addEventListener('change', e => {
+  if (e.target.files[0]) loadImageFile(e.target.files[0]);
+});
+
+dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('drag-over'); });
+dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
+dropZone.addEventListener('drop', e => {
+  e.preventDefault();
+  dropZone.classList.remove('drag-over');
+  if (e.dataTransfer.files[0]) loadImageFile(e.dataTransfer.files[0]);
+});
+
+function loadImageFile(file) {
+  const reader = new FileReader();
+  reader.onload = ev => {
+    showPreview(ev.target.result);
+    log(`Loaded: ${file.name} (${(file.size/1024).toFixed(1)} KB)`);
+  };
+  reader.readAsDataURL(file);
+}
+
+function showPreview(src) {
+  const img = document.getElementById('preview-img');
+  const icon = document.getElementById('drop-icon');
+  img.src = src;
+  img.style.display = 'block';
+  icon.style.display = 'none';
+  dropZone.querySelectorAll('p, small').forEach(el => el.style.display = 'none');
+  dropZone.classList.add('has-image');
+  document.getElementById('btn-clear').disabled = false;
+  document.getElementById('btn-convert').disabled = false;
+  imageData = null;
+  document.getElementById('polar-preview').style.display = 'none';
+  updateSendButton();
+}
+
+document.getElementById('btn-clear').addEventListener('click', clearImage);
+function clearImage() {
+  document.getElementById('preview-img').style.display = 'none';
+  document.getElementById('preview-img').src = '';
+  document.getElementById('drop-icon').style.display = '';
+  dropZone.querySelectorAll('p, small').forEach(el => el.style.display = '');
+  dropZone.classList.remove('has-image');
+  document.getElementById('btn-clear').disabled = true;
+  document.getElementById('btn-convert').disabled = true;
+  document.getElementById('polar-preview').style.display = 'none';
+  imageData = null;
+  updateSendButton();
+}
+
+// ═══════════════════════════════════════════════════════
+// Camera
+// ═══════════════════════════════════════════════════════
+const btnCamera = document.getElementById('btn-camera');
+const cameraWrap = document.getElementById('camera-wrap');
+const video = document.getElementById('camera-video');
+
+btnCamera.addEventListener('click', async () => {
+  if (cameraStream) {
+    stopCamera();
+    return;
+  }
+  try {
+    cameraStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' }, audio: false });
+    video.srcObject = cameraStream;
+    cameraWrap.style.display = 'block';
+    btnCamera.textContent = 'Cancel camera';
+    dropZone.style.display = 'none';
+    log('Camera started');
+  } catch (e) {
+    log(`Camera error: ${e.message}`, 'err');
+  }
+});
+
+function stopCamera() {
+  if (cameraStream) { cameraStream.getTracks().forEach(t => t.stop()); cameraStream = null; }
+  cameraWrap.style.display = 'none';
+  dropZone.style.display = '';
+  btnCamera.textContent = 'Use camera';
+}
+
+document.getElementById('btn-snap').addEventListener('click', () => {
+  const canvas = document.getElementById('canvas-preview');
+  const size = Math.min(video.videoWidth, video.videoHeight);
+  canvas.width = size; canvas.height = size;
+  const ctx = canvas.getContext('2d');
+  ctx.translate(size, 0); ctx.scale(-1, 1);  // mirror selfie
+  const ox = (video.videoWidth  - size) / 2;
+  const oy = (video.videoHeight - size) / 2;
+  ctx.drawImage(video, ox, oy, size, size, 0, 0, size, size);
+  showPreview(canvas.toDataURL('image/png'));
+  stopCamera();
+  log('Photo captured from camera');
+});
+
+// ═══════════════════════════════════════════════════════
+// Polar conversion (mirrors image_converter.py exactly)
+// ═══════════════════════════════════════════════════════
+document.getElementById('btn-convert').addEventListener('click', convertImage);
+
+document.getElementById('sl-brightness').addEventListener('input', e => {
+  document.getElementById('val-brightness').textContent = e.target.value + '%';
+});
+document.getElementById('sl-chunk').addEventListener('input', e => {
+  document.getElementById('val-chunk').textContent = e.target.value;
+});
+document.getElementById('sl-delay').addEventListener('input', e => {
+  document.getElementById('val-delay').textContent = e.target.value + ' ms';
+});
+
+async function convertImage() {
+  const previewSrc = document.getElementById('preview-img').src;
+  if (!previewSrc) { log('No image loaded', 'warn'); return; }
+
+  const SLICES     = parseInt(document.getElementById('sel-slices').value);
+  const BRIGHTNESS = parseInt(document.getElementById('sl-brightness').value) / 100;
+  const GAMMA      = parseFloat(document.getElementById('sel-gamma').value);
+  const IMAGE_SIZE = SLICES * LEDS_PER_BLADE * NUM_BLADES * 3;
+
+  // Gamma correction: preserves perceptual color ratios at low brightness.
+  // Without it, orange looks yellow, purple looks blue, etc.
+  function gammaCorrect(value) {
+    if (value === 0) return 0;
+    const v = (value / 255.0) * BRIGHTNESS;
+    return Math.round(Math.pow(v, 1.0 / GAMMA) * 255);
+  }
+
+  log(`Converting: ${SLICES} slices, brightness ${(BRIGHTNESS*100).toFixed(0)}%`);
+  document.getElementById('btn-convert').disabled = true;
+
+  const img = new Image();
+  img.src = previewSrc;
+  await new Promise(r => img.onload = r);
+
+  // Draw cropped square to offscreen canvas
+  const size = Math.min(img.naturalWidth, img.naturalHeight);
+  const offscreen = document.createElement('canvas');
+  offscreen.width = size; offscreen.height = size;
+  const ctx = offscreen.getContext('2d');
+  ctx.drawImage(img,
+    (img.naturalWidth  - size) / 2,
+    (img.naturalHeight - size) / 2,
+    size, size, 0, 0, size, size
+  );
+  const px = ctx.getImageData(0, 0, size, size).data;  // RGBA flat array
+
+  function getPixel(x, y) {
+    x = Math.max(0, Math.min(size - 1, Math.round(x)));
+    y = Math.max(0, Math.min(size - 1, Math.round(y)));
+    const i = (y * size + x) * 4;
+    return [px[i], px[i+1], px[i+2]];
+  }
+
+  function sample(xf, yf) {
+    // Bilinear interpolation (matches image_converter.py fixed version)
+    const x0 = Math.floor(xf), y0 = Math.floor(yf);
+    const x1 = Math.min(x0 + 1, size - 1);
+    const y1 = Math.min(y0 + 1, size - 1);
+    const dx = xf - x0, dy = yf - y0;
+    const [r00,g00,b00] = getPixel(x0, y0);
+    const [r10,g10,b10] = getPixel(x1, y0);
+    const [r01,g01,b01] = getPixel(x0, y1);
+    const [r11,g11,b11] = getPixel(x1, y1);
+    const r = r00*(1-dx)*(1-dy) + r10*dx*(1-dy) + r01*(1-dx)*dy + r11*dx*dy;
+    const g = g00*(1-dx)*(1-dy) + g10*dx*(1-dy) + g01*(1-dx)*dy + g11*dx*dy;
+    const b = b00*(1-dx)*(1-dy) + b10*dx*(1-dy) + b01*(1-dx)*dy + b11*dx*dy;
+    return [r, g, b];
+  }
+
+  const fanData = new Uint8Array(IMAGE_SIZE);
+  const cx = size / 2, cy = size / 2, maxR = size / 2;
+  let ptr = 0;
+
+  for (let s = 0; s < SLICES; s++) {
+    const theta  = 2 * Math.PI * s / SLICES;
+    const theta2 = theta + Math.PI;
+
+    // Blade 0
+    for (let led = 0; led < LEDS_PER_BLADE; led++) {
+      const radius = (led + 0.5) / LEDS_PER_BLADE;
+      const x = cx + radius * maxR * Math.cos(theta);
+      const y = cy + radius * maxR * Math.sin(theta);
+      const [r, g, b] = sample(x, y);
+      fanData[ptr++] = gammaCorrect(g);  // GRB order
+      fanData[ptr++] = gammaCorrect(r);
+      fanData[ptr++] = gammaCorrect(b);
+    }
+
+    // Blade 1 — 180° opposite
+    for (let led = 0; led < LEDS_PER_BLADE; led++) {
+      const radius = (led + 0.5) / LEDS_PER_BLADE;
+      const x = cx + radius * maxR * Math.cos(theta2);
+      const y = cy + radius * maxR * Math.sin(theta2);
+      const [r, g, b] = sample(x, y);
+      fanData[ptr++] = gammaCorrect(g);
+      fanData[ptr++] = gammaCorrect(r);
+      fanData[ptr++] = gammaCorrect(b);
+    }
+  }
+
+  imageData = fanData;
+  log(`Converted: ${IMAGE_SIZE} bytes (${SLICES} slices)`, 'ok');
+
+  // Render polar preview
+  renderPolarPreview(fanData, SLICES, offscreen);
+
+  document.getElementById('btn-convert').disabled = false;
+  updateSendButton();
+}
+
+function renderPolarPreview(fanData, SLICES, srcCanvas) {
+  const OUT = 300;
+  const previewCanvas = document.createElement('canvas');
+  previewCanvas.width = OUT; previewCanvas.height = OUT;
+  const ctx = previewCanvas.getContext('2d');
+  ctx.fillStyle = '#0a0a0f';
+  ctx.fillRect(0, 0, OUT, OUT);
+
+  const cx = OUT / 2, cy = OUT / 2, maxR = OUT / 2;
+  const dotR = Math.max(1.5, (maxR / LEDS_PER_BLADE) * 0.65);
+  const STRIDE = LEDS_PER_BLADE * NUM_BLADES * 3;
+
+  for (let s = 0; s < SLICES; s++) {
+    const theta  = 2 * Math.PI * s / SLICES;
+    const theta2 = theta + Math.PI;
+    const off = s * STRIDE;
+
+    for (let led = 0; led < LEDS_PER_BLADE; led++) {
+      const radius = (led + 0.5) / LEDS_PER_BLADE;
+      // Blade 0 — GRB → RGB for display
+      const i0 = off + led * 3;
+      const g0 = fanData[i0], r0 = fanData[i0+1], b0 = fanData[i0+2];
+      ctx.fillStyle = `rgb(${r0},${g0},${b0})`;
+      const x0 = cx + radius * maxR * Math.cos(theta);
+      const y0 = cy + radius * maxR * Math.sin(theta);
+      ctx.beginPath(); ctx.arc(x0, y0, dotR, 0, Math.PI*2); ctx.fill();
+
+      // Blade 1
+      const i1 = off + LEDS_PER_BLADE * 3 + led * 3;
+      const g1 = fanData[i1], r1 = fanData[i1+1], b1 = fanData[i1+2];
+      ctx.fillStyle = `rgb(${r1},${g1},${b1})`;
+      const x1 = cx + radius * maxR * Math.cos(theta2);
+      const y1 = cy + radius * maxR * Math.sin(theta2);
+      ctx.beginPath(); ctx.arc(x1, y1, dotR, 0, Math.PI*2); ctx.fill();
+    }
+  }
+
+  const polarImg = document.getElementById('polar-preview');
+  polarImg.src = previewCanvas.toDataURL();
+  polarImg.style.display = 'block';
+}
+
+// ═══════════════════════════════════════════════════════
+// Send over BLE
+// ═══════════════════════════════════════════════════════
+document.getElementById('btn-send').addEventListener('click', sendToFan);
+
+async function sendToFan() {
+  if (!rxChar || !imageData) return;
+
+  const CHUNK_SIZE = parseInt(document.getElementById('sl-chunk').value);
+  const DELAY_MS   = parseInt(document.getElementById('sl-delay').value);
+
+  const payload = new Uint8Array(MAGIC.length + imageData.length);
+  payload.set(MAGIC, 0);
+  payload.set(imageData, MAGIC.length);
+
+  const total  = payload.length;
+  const chunks = Math.ceil(total / CHUNK_SIZE);
+  log(`Sending ${total} bytes in ${chunks} chunks (${CHUNK_SIZE}B each, ${DELAY_MS}ms delay)`);
+
+  document.getElementById('btn-send').disabled    = true;
+  document.getElementById('btn-connect').disabled = true;
+  const progWrap = document.getElementById('progress-wrap');
+  const progBar  = document.getElementById('progress-bar');
+  const progLabel = document.getElementById('progress-label');
+  progWrap.style.display = 'block';
+
+  // Set up ACK promise BEFORE sending — the Pico may notify before the
+  // send loop finishes (it calls tick() continuously), so ackResolve must
+  // be in place to catch it. onNotify checks this flag on every notification.
+  const ackPromise = new Promise(r => { ackResolve = r; });
+
+  let sent = 0;
+  const t0 = performance.now();
+
+  try {
+    for (let i = 0; i < chunks; i++) {
+      const start = i * CHUNK_SIZE;
+      const end   = Math.min(start + CHUNK_SIZE, total);
+      const chunk = payload.slice(start, end);
+
+      await rxChar.writeValueWithResponse(chunk);
+      sent = end;
+
+      const pct = Math.round(sent * 100 / total);
+      progBar.style.width = pct + '%';
+      progLabel.textContent = `${pct}%  (${sent} / ${total} bytes)`;
+
+      if (DELAY_MS > 0) await sleep(DELAY_MS);
+    }
+
+    const elapsed = ((performance.now() - t0) / 1000).toFixed(2);
+    const kbps    = (total / 1024 / (elapsed || 0.001)).toFixed(1);
+    log(`Transfer complete in ${elapsed}s (${kbps} kB/s)`, 'ok');
+
+    // Wait for OK ack — may already be resolved if Pico was fast
+    progLabel.textContent = 'Waiting for acknowledgement...';
+    await Promise.race([
+      ackPromise,
+      sleep(10000).then(() => { throw new Error('ACK timeout — image may still be active on fan'); }),
+    ]);
+    log('Fan acknowledged — image active!', 'ok');
+    progLabel.textContent = 'Done!';
+
+  } catch (e) {
+    log(`Send error: ${e.message}`, 'err');
+    progLabel.textContent = 'Error — see log';
+  } finally {
+    document.getElementById('btn-send').disabled    = false;
+    document.getElementById('btn-connect').disabled = false;
+    setTimeout(() => {
+      progWrap.style.display = 'none';
+      progBar.style.width = '0%';
+    }, 3000);
+  }
+}
+
+// ═══════════════════════════════════════════════════════
+// Helpers
+// ═══════════════════════════════════════════════════════
+function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+function updateSendButton() {
+  document.getElementById('btn-send').disabled = !(rxChar && imageData);
+}
+
+// ── Slider wiring ──
+['brightness','chunk','delay'].forEach(id => {
+  const sl = document.getElementById(`sl-${id}`);
+  if (sl) sl.dispatchEvent(new Event('input'));
+});
+
+log('POV Fan HMI ready — connect your fan to get started');
+</script>
+</body>
+</html>
