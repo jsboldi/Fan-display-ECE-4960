@@ -13,7 +13,10 @@ NUM_BLADES = 2
 SLICES = 32
 OUTPUT_FILE = "fan_image.bin"
 
-BRIGHTNESS = 0.08  # Adjust to taste (0.0 = off, 1.0 = full)
+BRIGHTNESS = 0.15  # Overall brightness (0.0 = off, 1.0 = full)
+GAMMA     = 2.2   # Gamma correction — fixes color accuracy at low brightness.
+                  # Without gamma, orange looks yellow, purple looks blue, etc.
+                  # 2.2 matches human eye perception of LED intensity.
 
 # ==========================================
 # Argument Check
@@ -73,6 +76,21 @@ def sample(x, y):
     return int(r), int(g), int(b)
 
 # ==========================================
+# Gamma correction
+# ==========================================
+
+def gamma_correct(value):
+    """
+    Apply brightness scaling and gamma correction to a single channel value.
+    Maps input 0-255 → output 0-255 with perceptual linearity.
+    Without this, low-brightness colors look shifted (orange → yellow, etc).
+    """
+    if value == 0:
+        return 0
+    v = (value / 255.0) * BRIGHTNESS
+    return int((v ** (1.0 / GAMMA)) * 255)
+
+# ==========================================
 # Convert Cartesian → Polar
 # ==========================================
 
@@ -91,10 +109,12 @@ for slice_index in range(SLICES):
         y = max(0, min(height - 1.001, y))
         r_val, g_val, b_val = sample(x, y)
 
-        # Apply brightness scaling
-        r_val = int(r_val * BRIGHTNESS)
-        g_val = int(g_val * BRIGHTNESS)
-        b_val = int(b_val * BRIGHTNESS)
+        # Apply brightness + gamma correction.
+        # gamma_correct() maps: pixel → (pixel/255 * brightness)^(1/gamma) * 255
+        # This preserves perceptual color ratios at low brightness levels.
+        r_val = gamma_correct(r_val)
+        g_val = gamma_correct(g_val)
+        b_val = gamma_correct(b_val)
 
         fan_data += struct.pack("BBB", g_val, r_val, b_val)
 
@@ -108,10 +128,9 @@ for slice_index in range(SLICES):
         y = max(0, min(height - 1.001, y))
         r_val, g_val, b_val = sample(x, y)
 
-        # Apply brightness scaling
-        r_val = int(r_val * BRIGHTNESS)
-        g_val = int(g_val * BRIGHTNESS)
-        b_val = int(b_val * BRIGHTNESS)
+        r_val = gamma_correct(r_val)
+        g_val = gamma_correct(g_val)
+        b_val = gamma_correct(b_val)
 
         fan_data += struct.pack("BBB", g_val, r_val, b_val)
 
