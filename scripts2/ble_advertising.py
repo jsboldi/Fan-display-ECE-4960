@@ -1,3 +1,5 @@
+# Genereated with the help of AI tools 
+
 # ==============================================================================
 # ble_advertising.py — BLE advertising payload builder / decoder
 # Target: Raspberry Pi Pico W, MicroPython
