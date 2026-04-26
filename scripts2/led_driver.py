@@ -1,3 +1,5 @@
+# Generated with the help of AI tools 
+
 # ==============================================================================
 # led_driver.py — Dual-blade PIO LED driver for SK6805 / WS2812B
 # Target: Raspberry Pi Pico W, MicroPython
