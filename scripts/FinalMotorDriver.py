@@ -1,3 +1,5 @@
+# Generated with the help of AI tools 
+
 from machine import Pin, PWM
 import time
 
@@ -7,7 +9,7 @@ ENC_B_PIN = 3
 PWM_PIN   = 1
 DIR_PIN   = 0
 CPR = 100
-TARGET_RPM = 900
+TARGET_RPM = 600
 SAMPLE_TIME = 0.1
 
 # ====== PID GAINS ======
