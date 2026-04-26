@@ -1,3 +1,5 @@
+# Genereated with the help of AI tools 
+
 # ==============================================================================
 # config.py — shared configuration for POV holographic fan
 # ==============================================================================
