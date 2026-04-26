@@ -1,3 +1,5 @@
+# Genereated with the help of AI tools 
+
 # ==============================================================================
 # display_controller.py — IR-synced POV display loop
 # Target: Raspberry Pi Pico W, MicroPython
