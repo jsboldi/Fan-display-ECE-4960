@@ -1,3 +1,5 @@
+# Generated with the help of AI tools 
+
 # ==============================================================================
 # main.py — POV holographic fan top-level entry point
 # Target: Raspberry Pi Pico W, MicroPython
