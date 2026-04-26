@@ -1,3 +1,5 @@
+# Genereated with the help of AI tools 
+
 # ==============================================================================
 # ble_receiver.py — BLE peripheral for dynamic-size image transfers
 # Target: Raspberry Pi Pico W, MicroPython
