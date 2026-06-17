@@ -1,7 +1,7 @@
 # Genereated with the help of AI tools 
 
 # ==============================================================================
-# display_controller.py — IR-synced POV display loop
+# display_controller.py — FREERUN AND IR-synced POV display loop options
 # Target: Raspberry Pi Pico W, MicroPython
 #
 # No changes from original — the _slice_start = now timing logic is correct
