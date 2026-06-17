@@ -11,7 +11,7 @@
 # is still below threshold, so the next write fires ~33 µs late (0.8% error).
 #
 # Modes:
-#   FREERUN  — no IR signal: cycles slices on a fixed timer at 900 RPM
+#   FREERUN  — no IR signal: cycles slices on a fixed timer at 600 RPM
 #   SYNCED   — IR signal present: cycles based on measured revolution period
 # ==============================================================================
 
@@ -21,7 +21,7 @@ from config import (
     SLICES, SLICE_STRIDE, IR_PIN, IR_TIMEOUT_MS,
 )
 
-FREERUN_RPM       = 900
+FREERUN_RPM       = 600
 FREERUN_PERIOD_US = int(60_000_000 / FREERUN_RPM)   # 66 667 µs
 
 
